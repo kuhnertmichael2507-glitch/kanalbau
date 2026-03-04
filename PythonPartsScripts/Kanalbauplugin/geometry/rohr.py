@@ -6,12 +6,41 @@ Erstellt ein hohles zylindrisches Rohr entlang eines beliebigen Vektors
 
 Die Zylinderachse wird direkt aus dem Differenzvektor abgeleitet, sodass
 das Gefälle automatisch abgebildet wird.
+
+AxisPlacement3D-Konventionen (Allplan 2024):
+  Für orientierte Zylinder (beliebige Achsrichtung) muss die Signatur
+    AxisPlacement3D(Point3D, xvector, zvector)
+  verwendet werden, wobei zvector die Zylinderachse definiert und xvector
+  senkrecht dazu stehen muss.
+  NICHT gültig: AxisPlacement3D(Point3D, Vector3D)  ← ArgumentError
 """
 
 import math
 
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BasisElements as AllplanBasisElements
+
+
+def _perp_vector(nx: float, ny: float, nz: float) -> AllplanGeo.Vector3D:
+    """
+    Berechnet einen Einheitsvektor senkrecht zu (nx, ny, nz).
+    Wird als X-Achse für AxisPlacement3D(Point3D, xvector, zvector) benötigt.
+    """
+    # Kreuzprodukt mit (0, 0, 1) – funktioniert für fast alle Richtungen
+    if abs(nz) < 0.9:
+        # (nx,ny,nz) × (0,0,1) = (ny·1 − nz·0,  nz·0 − nx·1,  nx·0 − ny·0)
+        #                       = (ny, -nx, 0)
+        px, py, pz = ny, -nx, 0.0
+    else:
+        # Fast parallel zu Z → Kreuzprodukt mit (1, 0, 0) statt
+        # (nx,ny,nz) × (1,0,0) = (ny·0 − nz·0,  nz·1 − nx·0,  nx·0 − ny·1)
+        #                       = (0, nz, -ny)
+        px, py, pz = 0.0, nz, -ny
+
+    length = math.sqrt(px * px + py * py + pz * pz)
+    if length < 1e-9:
+        return AllplanGeo.Vector3D(1.0, 0.0, 0.0)
+    return AllplanGeo.Vector3D(px / length, py / length, pz / length)
 
 
 def create_rohr(
@@ -37,18 +66,15 @@ def create_rohr(
 
     Hinweise
     --------
-    - Zylinderachse = Vektor(start_pt → end_pt), normalisiert auf Länge 1
-    - BRep3D.CreateCylinder erwartet height = Länge entlang der lokalen Z-Achse
-      der AxisPlacement3D. Wir übergeben den Richtungsvektor als lokale Z-Achse
-      und height = euklidische Distanz zwischen den Punkten.
-    - Beim Zusammensetzen mit den Schächten liegt der Rohrmittelpunkt auf
-      der Schachtachse; die Rohrsohle (unterster Punkt des Querschnitts) liegt
-      r_aussen unterhalb des Mittelpunkts. Für die vereinfachte Darstellung
-      wird hier der übergebene start_pt als Achsenmittelpunkt interpretiert.
+    - BRep3D.CreateCylinder verlängert den Zylinder entlang der lokalen Z-Achse
+      der AxisPlacement3D (= zvector des Placements).
+    - height = euklidische Distanz start_pt → end_pt (Schrägmaß).
+    - AxisPlacement3D(Point3D, xvector, zvector): zvector = Rohrrichtung (normiert),
+      xvector = beliebiger Vektor senkrecht zur Rohrrichtung.
     """
     r_innen = max(r_innen, 10.0)
 
-    # Richtungsvektor
+    # Richtungsvektor und Länge
     dx = end_pt.X - start_pt.X
     dy = end_pt.Y - start_pt.Y
     dz = end_pt.Z - start_pt.Z
@@ -58,10 +84,14 @@ def create_rohr(
         # Entartetes Rohr – nichts erzeugen
         return []
 
-    richtung = AllplanGeo.Vector3D(dx, dy, dz)
+    # Normierter Richtungsvektor (= lokale Z-Achse des Zylinders)
+    nx, ny, nz = dx / laenge, dy / laenge, dz / laenge
 
-    # AxisPlacement3D: Ursprung = start_pt, lokale Z-Achse = Rohrrichtung
-    axis = AllplanGeo.AxisPlacement3D(start_pt, richtung)
+    z_vec = AllplanGeo.Vector3D(nx, ny, nz)
+    x_vec = _perp_vector(nx, ny, nz)
+
+    # AxisPlacement3D(Point3D, xvector, zvector) – einzige gültige 2-Vektor-Signatur
+    axis = AllplanGeo.AxisPlacement3D(start_pt, x_vec, z_vec)
 
     outer = AllplanGeo.BRep3D.CreateCylinder(axis, r_aussen, laenge, True, True)
     inner = AllplanGeo.BRep3D.CreateCylinder(axis, r_innen,  laenge, True, True)

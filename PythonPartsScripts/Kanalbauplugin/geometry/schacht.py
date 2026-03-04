@@ -15,6 +15,13 @@ Geometrischer Aufbau (von unten nach oben):
   2. Schachtring  – Hohlzylinder (BRep3D Subtraktion)
   3. Konus        – Kegelstumpf (optional, BRep3D Subtraktion + Clipping)
   4. Aufbau/Hals  – Kleiner Hohlzylinder
+
+AxisPlacement3D-Konventionen (Allplan 2024):
+  Gültige Signaturen:
+    AxisPlacement3D()                              – Standard Z-oben
+    AxisPlacement3D(Point3D)                       – Z-oben, Ursprung = point
+    AxisPlacement3D(Point3D, xvector, zvector)     – vollständig orientiert
+  NICHT gültig: AxisPlacement3D(Point3D, Vector3D)  ← würde ArgumentError werfen
 """
 
 import math
@@ -37,7 +44,8 @@ def _hollow_cylinder(origin: AllplanGeo.Point3D,
     Gibt ModelElement3D zurück oder None bei Fehler.
     """
     r_innen = max(r_innen, 10.0)
-    axis = AllplanGeo.AxisPlacement3D(origin, AllplanGeo.Vector3D(0, 0, 1))
+    # AxisPlacement3D(Point3D) → Standard-Orientierung: lokale Z-Achse = Welt-Z (+oben)
+    axis = AllplanGeo.AxisPlacement3D(origin)
 
     outer = AllplanGeo.BRep3D.CreateCylinder(axis, r_aussen, hoehe, True, True)
     inner = AllplanGeo.BRep3D.CreateCylinder(axis, r_innen,  hoehe, True, True)
@@ -70,7 +78,8 @@ def _frustum(origin: AllplanGeo.Point3D,
         """Hilfsfunktion: Vollkegel + Clipping → Kegelstumpf als BRep3D."""
         if abs(r_bottom - r_top) < 0.1:
             # Degeneriert: Zylinder statt Kegel
-            axis = AllplanGeo.AxisPlacement3D(origin, AllplanGeo.Vector3D(0, 0, 1))
+            # AxisPlacement3D(Point3D) → Standard Z-oben
+            axis = AllplanGeo.AxisPlacement3D(origin)
             return AllplanGeo.BRep3D.CreateCylinder(axis, r_bottom, hoehe, True, True)
 
         # Spitzenhöhe über dem Ursprung (ähnliche Dreiecke)
@@ -82,7 +91,7 @@ def _frustum(origin: AllplanGeo.Point3D,
         )
 
         cone3d = AllplanGeo.Cone3D(
-            AllplanGeo.AxisPlacement3D(origin, AllplanGeo.Vector3D(0, 0, 1)),
+            AllplanGeo.AxisPlacement3D(origin),   # Standard Z-oben
             r_bottom,
             0.0,
             apex_pt
@@ -90,13 +99,11 @@ def _frustum(origin: AllplanGeo.Point3D,
         full_cone = AllplanGeo.BRep3D.CreateCone(cone3d, True)
 
         # Clipping-Quader oberhalb z_trunkierung
+        # AxisPlacement3D(Point3D) → Standard Z-oben; Höhe des Quaders wächst in +Z
         z_cut = origin.Z + hoehe
+        clip_origin = AllplanGeo.Point3D(origin.X - 20000, origin.Y - 20000, z_cut)
         clip = AllplanGeo.BRep3D.CreateCuboid(
-            AllplanGeo.AxisPlacement3D(
-                AllplanGeo.Point3D(origin.X - 20000, origin.Y - 20000, z_cut),
-                AllplanGeo.Vector3D(1, 0, 0),
-                AllplanGeo.Vector3D(0, 1, 0)
-            ),
+            AllplanGeo.AxisPlacement3D(clip_origin),   # Standard Z-oben
             40000.0, 40000.0, apex_h + 5000.0
         )
         err, stumpf = AllplanGeo.MakeSubtraction(full_cone, clip)
@@ -168,6 +175,7 @@ def create_schacht(
 
     # ------------------------------------------------------------------
     # 1. SOHLPLATTE (Cuboid, zentriert, ragt nach unten)
+    # AxisPlacement3D(Point3D) → Standard Z-oben; Höhe wächst in +Z
     # ------------------------------------------------------------------
     sohlplatte_origin = AllplanGeo.Point3D(
         origin.X - r_aussen,
@@ -175,11 +183,7 @@ def create_schacht(
         z0
     )
     sohlplatte_geo = AllplanGeo.BRep3D.CreateCuboid(
-        AllplanGeo.AxisPlacement3D(
-            sohlplatte_origin,
-            AllplanGeo.Vector3D(1, 0, 0),
-            AllplanGeo.Vector3D(0, 1, 0)
-        ),
+        AllplanGeo.AxisPlacement3D(sohlplatte_origin),
         schacht_dm,    # Länge in X
         schacht_dm,    # Breite in Y
         sohlplatte_h   # Höhe in Z

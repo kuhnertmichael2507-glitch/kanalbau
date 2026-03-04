@@ -95,11 +95,10 @@ def create_stationierung(
             start_pt.Z + uz * s
         )
 
-        # Textposition: Rohrachsenpunkt + Querversatz + Höhenversatz
-        pt_text = AllplanGeo.Point3D(
+        # Textposition: Rohrachsenpunkt + Querversatz (Point2D – TextElement ist 2D)
+        pt_text = AllplanGeo.Point2D(
             pt_achse.X + qx * text_offset,
-            pt_achse.Y + qy * text_offset,
-            pt_achse.Z + text_offset      # Texte immer etwas über Sohle
+            pt_achse.Y + qy * text_offset
         )
 
         # Stationstext (Meter)
@@ -110,9 +109,7 @@ def create_stationierung(
         text_props = AllplanBasisElements.TextProperties()
         text_props.Height        = text_hoehe
         text_props.Width         = text_hoehe * 0.7
-        text_props.RotationAngle = AllplanGeo.Angle(
-            math.radians(winkel_grad)
-        )
+        text_props.RotationAngle = math.radians(winkel_grad)
 
         text_ele = AllplanBasisElements.TextElement(
             common_props,

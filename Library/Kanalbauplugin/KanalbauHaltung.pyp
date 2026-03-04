@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Element>
   <Script>
-    <Name>Kanalbauplugin\KanalbauHaltung.py</Name>
+    <Name>KanalbauHaltung.py</Name>
     <Title>Kanalbauhaltung</Title>
     <Version>1.0</Version>
     <ReadLastInput>True</ReadLastInput>
