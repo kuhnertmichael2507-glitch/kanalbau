@@ -106,14 +106,12 @@ class Interactor:
 
     # ------------------------------------------------------------------
     def on_preview_draw(self):
-        """Zeichnet eine Vorschau-Linie während der Mausbewegung."""
-        if not _IFW_OK or self.input_mode != 1 or self.first_pt is None:
+        """Zeichnet eine Vorschau-Linie (Start → aktuelle Mausposition)."""
+        if self.input_mode != 1 or self.first_pt is None:
             return
         try:
-            cur = self.coord_input.GetCurrentPoint().GetPoint()
-            if cur is None:
-                return
-            line  = AllplanGeo.Line3D(self.first_pt, cur)
+            # self.cur_pt wird in process_mouse_msg laufend aktualisiert
+            line  = AllplanGeo.Line3D(self.first_pt, self.cur_pt)
             props = AllplanBaseElements.CommonProperties()
             props.GetGlobalProperties()
             preview = [AllplanBasisElements.ModelElement3D(props, line)]
@@ -135,28 +133,28 @@ class Interactor:
         --------
         True  = weiter auf Eingabe warten
         False = Eingabe abgeschlossen (Allplan ruft create_element auf)
+
+        Hinweise zur API (verifiziert aus BuildingElementInput.py):
+          - pnt ist immer Point2D (Viewkoordinate)
+          - coord_input.IsMouseMove(mouse_msg) → korrekte Klick-Erkennung
+          - coord_input.GetInputPoint(mouse_msg, pnt, msg_info).GetPoint()
+            → 3D-Weltkoordinate mit Fangpunkt-Logik
         """
-        # pnt kann Point2D (Grundriss) oder Point3D (3D-Ansicht) sein → sicher konvertieren
-        def _as_3d(p) -> AllplanGeo.Point3D:
-            z = p.Z if hasattr(p, "Z") else 0.0
-            return AllplanGeo.Point3D(p.X, p.Y, z)
+        # Klick vs. Bewegung: Instanzmethode auf coord_input (NICHT AllplanIFWInput.CoordInput)
+        is_move = self.coord_input.IsMouseMove(mouse_msg)
 
-        self.cur_pt = _as_3d(pnt)
+        # 3D-Weltpunkt holen (GetInputPoint liefert gefangten / projizierten Punkt)
+        try:
+            pt3d = self.coord_input.GetInputPoint(mouse_msg, pnt, msg_info).GetPoint()
+        except Exception:
+            z = getattr(pnt, "Z", 0.0)
+            pt3d = AllplanGeo.Point3D(pnt.X, pnt.Y, z)
 
-        # Mausbewegung erkennen: IsMouseMove (IFW) oder WM_MOUSEMOVE (0x0200 = 512)
-        def _is_move(msg):
-            if _IFW_OK:
-                try:
-                    return AllplanIFWInput.CoordInput.IsMouseMove(msg)
-                except Exception:
-                    pass
-            return msg == 512   # WM_MOUSEMOVE fallback
-
-        pt3d = _as_3d(pnt)
+        self.cur_pt = pt3d   # für Preview-Linie
 
         if self.input_mode == 0:
             # --- Warten auf Startpunkt ---
-            if not _is_move(mouse_msg):
+            if not is_move:
                 self.first_pt = pt3d
                 if self.build_ele is not None:
                     self.build_ele.StartX.value = pt3d.X
@@ -171,7 +169,7 @@ class Interactor:
                         pass
         else:
             # --- Warten auf Endpunkt ---
-            if not _is_move(mouse_msg):
+            if not is_move:
                 if self.first_pt is not None and self.build_ele is not None:
                     self.build_ele.DeltaX.value = pt3d.X - self.first_pt.X
                     self.build_ele.DeltaY.value = pt3d.Y - self.first_pt.Y
