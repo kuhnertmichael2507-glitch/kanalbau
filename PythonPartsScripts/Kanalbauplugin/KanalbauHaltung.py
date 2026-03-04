@@ -60,16 +60,19 @@ def check_allplan_version(build_ele: BuildingElement, version: float) -> bool:
 # ---------------------------------------------------------------------------
 
 def create_interactor(coord_input, pyp_path, str_table_service,
-                      build_ele_list=None, doc=None):
+                      build_ele_list, build_ele_composite,
+                      build_ele_ctrl_props_list, modification_ele_list):
     """
-    Factory-Funktion – wird von Allplan beim Start des Interaktors aufgerufen.
+    Factory-Funktion – wird von Allplan 2024 mit genau 7 Argumenten aufgerufen.
 
-    Allplan 2024 übergibt 5 Argumente (build_ele_list, doc);
-    ältere Versionen nur 3. Defaultwerte machen die Funktion für beide Varianten
-    aufrufbar.
+    Allplan prüft per inspect.getfullargspec die Parameteranzahl:
+      3 → (coord_input, pyp_path, str_table_service)
+      7 → diese Signatur  ← wir verwenden diesen Zweig
+      sonst → 8-Arg-Aufruf → TypeError
+
+    build_ele_list[0] enthält das BuildingElement mit den Palettenparametern.
     """
-    return Interactor(coord_input, pyp_path, str_table_service,
-                      build_ele_list or [], doc)
+    return Interactor(coord_input, pyp_path, str_table_service, build_ele_list)
 
 
 class Interactor:
@@ -88,9 +91,9 @@ class Interactor:
     aktuellen Mausposition als Preview gezeichnet.
     """
 
-    def __init__(self, coord_input, pyp_path, str_table_service, build_ele_list, doc):
+    def __init__(self, coord_input, pyp_path, str_table_service, build_ele_list):
         self.coord_input  = coord_input
-        self.doc          = doc
+        self.doc          = None   # wird bei on_preview_draw gesetzt falls nötig
         self.build_ele    = build_ele_list[0] if build_ele_list else None
         self.first_pt     = None          # AllplanGeo.Point3D – nach Klick 1 gesetzt
         self.cur_pt       = AllplanGeo.Point3D()
