@@ -136,7 +136,12 @@ class Interactor:
         True  = weiter auf Eingabe warten
         False = Eingabe abgeschlossen (Allplan ruft create_element auf)
         """
-        self.cur_pt = pnt
+        # pnt kann Point2D (Grundriss) oder Point3D (3D-Ansicht) sein → sicher konvertieren
+        def _as_3d(p) -> AllplanGeo.Point3D:
+            z = p.Z if hasattr(p, "Z") else 0.0
+            return AllplanGeo.Point3D(p.X, p.Y, z)
+
+        self.cur_pt = _as_3d(pnt)
 
         # Mausbewegung erkennen: IsMouseMove (IFW) oder WM_MOUSEMOVE (0x0200 = 512)
         def _is_move(msg):
@@ -147,14 +152,16 @@ class Interactor:
                     pass
             return msg == 512   # WM_MOUSEMOVE fallback
 
+        pt3d = _as_3d(pnt)
+
         if self.input_mode == 0:
             # --- Warten auf Startpunkt ---
             if not _is_move(mouse_msg):
-                self.first_pt = AllplanGeo.Point3D(pnt.X, pnt.Y, pnt.Z)
+                self.first_pt = pt3d
                 if self.build_ele is not None:
-                    self.build_ele.StartX.value = pnt.X
-                    self.build_ele.StartY.value = pnt.Y
-                    self.build_ele.StartZ.value = pnt.Z
+                    self.build_ele.StartX.value = pt3d.X
+                    self.build_ele.StartY.value = pt3d.Y
+                    self.build_ele.StartZ.value = pt3d.Z
                 self.input_mode = 1
                 if _IFW_OK:
                     try:
@@ -166,9 +173,9 @@ class Interactor:
             # --- Warten auf Endpunkt ---
             if not _is_move(mouse_msg):
                 if self.first_pt is not None and self.build_ele is not None:
-                    self.build_ele.DeltaX.value = pnt.X - self.first_pt.X
-                    self.build_ele.DeltaY.value = pnt.Y - self.first_pt.Y
-                    self.build_ele.DeltaZ.value = pnt.Z - self.first_pt.Z
+                    self.build_ele.DeltaX.value = pt3d.X - self.first_pt.X
+                    self.build_ele.DeltaY.value = pt3d.Y - self.first_pt.Y
+                    self.build_ele.DeltaZ.value = pt3d.Z - self.first_pt.Z
                 return False   # Eingabe fertig → create_element wird aufgerufen
 
         return True
