@@ -1,0 +1,13 @@
+DN,Wandstaerke_mm,Material,Innenrauheit
+100,11,Steinzeug,0.1
+150,14,Steinzeug,0.1
+200,18,Beton,0.6
+250,22,Beton,0.6
+300,35,Beton,0.6
+400,40,Beton,0.6
+500,50,GFK,0.05
+600,60,GFK,0.05
+700,70,PVC,0.1
+800,80,PVC,0.1
+1000,100,Beton,0.6
+1200,120,Beton,0.6
