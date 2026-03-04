@@ -28,7 +28,15 @@ import os
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
-import NemAll_Python_IFW_Input as AllplanIFWInput
+
+# NemAll_Python_IFW_Input ist nur im Kontext eines Interaktors verfügbar.
+# Sicherer Import verhindert, dass das Modul beim Laden scheitert.
+try:
+    import NemAll_Python_IFW_Input as AllplanIFWInput
+    _IFW_OK = True
+except Exception:
+    AllplanIFWInput = None
+    _IFW_OK = False
 
 from BuildingElement import BuildingElement
 from CreateElementResult import CreateElementResult
@@ -51,9 +59,17 @@ def check_allplan_version(build_ele: BuildingElement, version: float) -> bool:
 # Interaktor  (2-Punkt-Eingabe: Rohrsohle Start → Ende)
 # ---------------------------------------------------------------------------
 
-def create_interactor(coord_input, pyp_path, str_table_service, build_ele_list, doc):
-    """Factory-Funktion – wird von Allplan beim Start des Interaktors aufgerufen."""
-    return Interactor(coord_input, pyp_path, str_table_service, build_ele_list, doc)
+def create_interactor(coord_input, pyp_path, str_table_service,
+                      build_ele_list=None, doc=None):
+    """
+    Factory-Funktion – wird von Allplan beim Start des Interaktors aufgerufen.
+
+    Allplan 2024 übergibt 5 Argumente (build_ele_list, doc);
+    ältere Versionen nur 3. Defaultwerte machen die Funktion für beide Varianten
+    aufrufbar.
+    """
+    return Interactor(coord_input, pyp_path, str_table_service,
+                      build_ele_list or [], doc)
 
 
 class Interactor:
@@ -75,32 +91,33 @@ class Interactor:
     def __init__(self, coord_input, pyp_path, str_table_service, build_ele_list, doc):
         self.coord_input  = coord_input
         self.doc          = doc
-        self.build_ele    = build_ele_list[0]
+        self.build_ele    = build_ele_list[0] if build_ele_list else None
         self.first_pt     = None          # AllplanGeo.Point3D – nach Klick 1 gesetzt
         self.cur_pt       = AllplanGeo.Point3D()
         self.input_mode   = 0             # 0 = wartet auf Klick 1, 1 = wartet auf Klick 2
 
-        prompt = AllplanIFWInput.InputStringConvert("Startpunkt Rohrsohle eingeben")
-        coord_input.InitFirstPointInput(prompt)
+        # Eingabeaufforderung setzen (nur wenn IFW-Modul geladen)
+        if _IFW_OK:
+            prompt = AllplanIFWInput.InputStringConvert("Startpunkt Rohrsohle eingeben")
+            coord_input.InitFirstPointInput(prompt)
 
     # ------------------------------------------------------------------
     def on_preview_draw(self):
         """Zeichnet eine Vorschau-Linie während der Mausbewegung."""
-        if self.input_mode == 1 and self.first_pt is not None:
+        if not _IFW_OK or self.input_mode != 1 or self.first_pt is None:
+            return
+        try:
             cur = self.coord_input.GetCurrentPoint().GetPoint()
             if cur is None:
                 return
-            line = AllplanGeo.Line3D(self.first_pt, cur)
+            line  = AllplanGeo.Line3D(self.first_pt, cur)
             props = AllplanBaseElements.CommonProperties()
             props.GetGlobalProperties()
             preview = [AllplanBasisElements.ModelElement3D(props, line)]
             AllplanBaseElements.DrawElementPreview(
-                self.doc,
-                AllplanGeo.Matrix3D(),
-                preview,
-                False,
-                None
-            )
+                self.doc, AllplanGeo.Matrix3D(), preview, False, None)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     def on_mouse_leave(self):
@@ -118,20 +135,34 @@ class Interactor:
         """
         self.cur_pt = pnt
 
+        # Mausbewegung erkennen: IsMouseMove (IFW) oder WM_MOUSEMOVE (0x0200 = 512)
+        def _is_move(msg):
+            if _IFW_OK:
+                try:
+                    return AllplanIFWInput.CoordInput.IsMouseMove(msg)
+                except Exception:
+                    pass
+            return msg == 512   # WM_MOUSEMOVE fallback
+
         if self.input_mode == 0:
             # --- Warten auf Startpunkt ---
-            if not AllplanIFWInput.CoordInput.IsMouseMove(mouse_msg):
+            if not _is_move(mouse_msg):
                 self.first_pt = AllplanGeo.Point3D(pnt.X, pnt.Y, pnt.Z)
-                self.build_ele.StartX.value = pnt.X
-                self.build_ele.StartY.value = pnt.Y
-                self.build_ele.StartZ.value = pnt.Z
+                if self.build_ele is not None:
+                    self.build_ele.StartX.value = pnt.X
+                    self.build_ele.StartY.value = pnt.Y
+                    self.build_ele.StartZ.value = pnt.Z
                 self.input_mode = 1
-                prompt = AllplanIFWInput.InputStringConvert("Endpunkt Rohrsohle eingeben")
-                self.coord_input.InitNextPointInput(prompt)
+                if _IFW_OK:
+                    try:
+                        prompt = AllplanIFWInput.InputStringConvert("Endpunkt Rohrsohle eingeben")
+                        self.coord_input.InitNextPointInput(prompt)
+                    except Exception:
+                        pass
         else:
             # --- Warten auf Endpunkt ---
-            if not AllplanIFWInput.CoordInput.IsMouseMove(mouse_msg):
-                if self.first_pt is not None:
+            if not _is_move(mouse_msg):
+                if self.first_pt is not None and self.build_ele is not None:
                     self.build_ele.DeltaX.value = pnt.X - self.first_pt.X
                     self.build_ele.DeltaY.value = pnt.Y - self.first_pt.Y
                     self.build_ele.DeltaZ.value = pnt.Z - self.first_pt.Z
