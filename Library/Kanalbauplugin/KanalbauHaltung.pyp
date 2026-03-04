@@ -5,11 +5,13 @@
     <Title>Kanalbauhaltung</Title>
     <Version>1.0</Version>
     <ReadLastInput>True</ReadLastInput>
+    <Interactor>True</Interactor>
   </Script>
 
   <!-- ================================================================
        SEITE 1: ÜBERSICHT
-       Haltungsname, Schachtnamen, Haltungslänge, Gefälle, Stationierung
+       Haltungsname, Schachtnamen, Stationierung.
+       Geometriekoordinaten werden vom Interaktor gesetzt (versteckt).
        ================================================================ -->
   <Page>
     <Name>Uebersicht</Name>
@@ -43,30 +45,6 @@
     </Parameter>
 
     <Parameter>
-      <Name>ExpTrassenGeometrie</Name>
-      <Text>Trassengeometrie</Text>
-      <ValueType>Expander</ValueType>
-
-      <Parameter>
-        <Name>Haltungslaenge</Name>
-        <Text>Haltungslänge (mm)</Text>
-        <Value>20000</Value>
-        <ValueType>Length</ValueType>
-        <MinValue>1000</MinValue>
-        <MaxValue>200000</MaxValue>
-      </Parameter>
-
-      <Parameter>
-        <Name>Gefalle</Name>
-        <Text>Gefälle (%)</Text>
-        <Value>1.5</Value>
-        <ValueType>Double</ValueType>
-        <MinValue>0.0</MinValue>
-        <MaxValue>20.0</MaxValue>
-      </Parameter>
-    </Parameter>
-
-    <Parameter>
       <Name>ExpStationierung</Name>
       <Text>Stationierung</Text>
       <ValueType>Expander</ValueType>
@@ -87,6 +65,60 @@
         <ValueType>Double</ValueType>
         <MinValue>0.0</MinValue>
       </Parameter>
+    </Parameter>
+
+    <!-- ============================================================
+         Versteckte Koordinaten-Parameter
+         Startpunkt = Rohrsohle Startschacht (globale Koordinaten, mm)
+         Delta      = Vektor Start → End (globale Koordinaten, mm)
+         Standardwerte: 20 m Haltung, 1,5 % Gefälle
+         ============================================================ -->
+    <Parameter>
+      <Name>StartX</Name>
+      <Text>Start X</Text>
+      <Value>0.0</Value>
+      <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+    </Parameter>
+
+    <Parameter>
+      <Name>StartY</Name>
+      <Text>Start Y</Text>
+      <Value>0.0</Value>
+      <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+    </Parameter>
+
+    <Parameter>
+      <Name>StartZ</Name>
+      <Text>Start Z</Text>
+      <Value>0.0</Value>
+      <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+    </Parameter>
+
+    <Parameter>
+      <Name>DeltaX</Name>
+      <Text>Delta X</Text>
+      <Value>20000.0</Value>
+      <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+    </Parameter>
+
+    <Parameter>
+      <Name>DeltaY</Name>
+      <Text>Delta Y</Text>
+      <Value>0.0</Value>
+      <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+    </Parameter>
+
+    <Parameter>
+      <Name>DeltaZ</Name>
+      <Text>Delta Z</Text>
+      <Value>-300.0</Value>
+      <ValueType>Double</ValueType>
+      <Visible>False</Visible>
     </Parameter>
 
   </Page>
