@@ -44,6 +44,7 @@ from HandleDirection import HandleDirection
 from HandleParameterData import HandleParameterData
 from HandleParameterType import HandleParameterType
 from HandleProperties import HandleProperties
+from PythonPartTransaction import PythonPartTransaction
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +72,10 @@ def create_interactor(coord_input, pyp_path, str_table_service,
       sonst → 8-Arg-Aufruf → TypeError
 
     build_ele_list[0] enthält das BuildingElement mit den Palettenparametern.
+    modification_ele_list wird für PythonPartTransaction.execute benötigt.
     """
-    return Interactor(coord_input, pyp_path, str_table_service, build_ele_list)
+    return Interactor(coord_input, pyp_path, str_table_service,
+                      build_ele_list, modification_ele_list)
 
 
 class Interactor:
@@ -91,13 +94,15 @@ class Interactor:
     aktuellen Mausposition als Preview gezeichnet.
     """
 
-    def __init__(self, coord_input, pyp_path, str_table_service, build_ele_list):
-        self.coord_input  = coord_input
-        self.doc          = None   # wird bei on_preview_draw gesetzt falls nötig
-        self.build_ele    = build_ele_list[0] if build_ele_list else None
-        self.first_pt     = None          # AllplanGeo.Point3D – nach Klick 1 gesetzt
-        self.cur_pt       = AllplanGeo.Point3D()
-        self.input_mode   = 0             # 0 = wartet auf Klick 1, 1 = wartet auf Klick 2
+    def __init__(self, coord_input, pyp_path, str_table_service,
+                 build_ele_list, modification_ele_list):
+        self.coord_input          = coord_input
+        self.doc                  = coord_input.GetInputViewDocument()
+        self.modification_ele_list = modification_ele_list
+        self.build_ele            = build_ele_list[0] if build_ele_list else None
+        self.first_pt             = None   # AllplanGeo.Point3D – nach Klick 1 gesetzt
+        self.cur_pt               = AllplanGeo.Point3D()
+        self.input_mode           = 0      # 0 = wartet auf Klick 1, 1 = wartet auf Klick 2
 
         # Eingabeaufforderung setzen (nur wenn IFW-Modul geladen)
         if _IFW_OK:
@@ -174,7 +179,25 @@ class Interactor:
                     self.build_ele.DeltaX.value = pt3d.X - self.first_pt.X
                     self.build_ele.DeltaY.value = pt3d.Y - self.first_pt.Y
                     self.build_ele.DeltaZ.value = pt3d.Z - self.first_pt.Z
-                return False   # Eingabe fertig → create_element wird aufgerufen
+
+                    # Elemente direkt erzeugen (Allplan ruft create_element nach
+                    # return False NICHT automatisch auf – PythonPartTransaction
+                    # ist der korrekte Weg im Interaktor-Kontext)
+                    try:
+                        result     = create_element(self.build_ele, self.doc)
+                        view_proj  = self.coord_input.GetViewWorldProjection()
+                        pyp_t      = PythonPartTransaction(self.doc)
+                        pyp_t.execute(
+                            AllplanGeo.Matrix3D(),
+                            view_proj,
+                            result.elements,
+                            self.modification_ele_list,
+                        )
+                    except Exception:
+                        import traceback
+                        traceback.print_exc()
+
+                return False   # Interaktor beenden
 
         return True
 
@@ -493,8 +516,13 @@ def create_element(build_ele: BuildingElement, doc) -> CreateElementResult:
     all_elements: list = []
 
     # 1. ROHRSOHLE als 3D-Linie
-    rohrsohle_line = AllplanGeo.Line3D(start_sohle, end_sohle)
-    all_elements.append(AllplanBasisElements.ModelElement3D(common_props, rohrsohle_line))
+    # (try/except: ModelElement3D akzeptiert Line3D in manchen Allplan-Versionen,
+    #  in anderen nur BRep3D – Fehler hier würde den Rest blockieren)
+    try:
+        rohrsohle_line = AllplanGeo.Line3D(start_sohle, end_sohle)
+        all_elements.append(AllplanBasisElements.ModelElement3D(common_props, rohrsohle_line))
+    except Exception:
+        pass
 
     # 2. STARTSCHACHT
     all_elements.extend(_create_schacht(
